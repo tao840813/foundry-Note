@@ -1,0 +1,143 @@
+# https://meilerlab.org/wp-content/uploads/2022/12/protein_mpnn_tutorial_Nov2022.pdf
+#原始 沒有修改的1QYS
+python protein_mpnn_run.py \
+  --pdb_path input/1QYS.pdb \
+  --out_folder output/1QYS_design \
+  --num_seq_per_target 10 \
+  --sampling_temp 0.1 \
+  --seed 42 \
+  --batch_size 1 \
+  --model_name v_48_020
+
+#特殊設計script residue bias...etc <-從helper_scripts去找
+
+## residue bias
+mkdir output/1QYS_disigns_biased
+python ./helper_scripts/make_bias_AA.py \
+  --output_path 1qys_bias.jsonl \
+  --AA_list "A F G I L M P V W Y" \
+  --bias_list "1.39 1.39 1.39 1.39 1.39 1.39 1.39 1.39 1.39 -1.1"
+
+```
+bias : >1 鼓勵
+       <1 抑制
+       =1 中性
+建構一個像這樣jsonl
+{"A": 1.39, "F": 1.39, "G": 1.39, "I": 1.39, "L": 1.39, "M": 1.39, "P": 1.39, "V": 1.39, "W": 1.39, "Y": -1.1}
+```
+python protein_mpnn_run.py \
+  --pdb_path input/1QYS.pdb \
+  --out_folder output/1QYS_disigns_biased \
+  --num_seq_per_target 10 \
+  --sampling_temp 0.1 \
+  --seed 42 \
+  --batch_size 1 \
+  --model_name v_48_020 \
+  --bias_AA_jsonl 1qys_bias.jsonl
+
+##fixed position
+### 重新設計LCB3的residue(Chain A) -> 告訴哪些chain市可以重新設計的
+1. 手動把pdb拆解
+python helper_scripts/parse_multiple_chains.py \
+  --input_path input/7jzm/ \
+  --output_path 7jzm.jsonl
+
+2. 指定哪些市可以設計的
+python helper_scripts/assign_fixed_chains.py \
+  --input_path 7jzm.jsonl \
+  --output_path 7jzm_assigned.jsonl \
+  --chain_list "A"
+輸出
+```
+PDB_ID : [ [designable_chains], [fixed_chains] ]
+{"7JZM": [["A"], ["B"]]}
+```
+3. 用pymol找出chain A相近5A的原子
+select interface, br. chain A within 5 of chain B
+reslist =[]
+iterate interface and name CA, reslist.append((resi))
+print(*reslist)
+1 3 4 6 7 8 10 11 13 14 17 18 30 31 33 34 37 40
+
+python helper_scripts/make_fixed_positions_dict.py --specify_non_fixed \
+--position_list "1 3 4 6 7 8 10 11 13 14 17 18 30 31 33 34 37 40" --chain_list "A" \
+--input_path 7jzm.jsonl --output_path 7jzm_fixed_pos.jsonl
+輸出
+```
+{"7JZM": ["A", {2,4,5,.....}]}
+```
+
+mkdir ./output/7jzm_designs
+python protein_mpnn_run.py \
+    --jsonl_path 7jzm.jsonl \
+    --chain_id_jsonl 7jzm_assigned.jsonl \
+    --fixed_positions_jsonl 7jzm_fixed_pos.jsonl \
+    --out_folder ./output/7jzm_designs \
+    --num_seq_per_target 10 \
+    --sampling_temp "0.1" \
+    --seed 42 \
+    --batch_size 1 \
+    --save_score 1 \
+    --save_probs 1
+
+####每個位點AA的機率
+```
+import plotly.express as px
+fig = px.imshow(np.exp(all_log_probs_concat).mean(0).T,
+                labels=dict(x="positions", y="amino acids", color="probability"),
+                y=list(alphabet),
+                template="simple_white"
+               )
+
+fig.update_xaxes(side="top")
+fig.show()
+##############################
+import plotly.express as px
+fig = px.imshow(all_probs_concat.mean(0).T,
+                labels=dict(x="positions", y="amino acids", color="probability"),
+                y=list(alphabet),
+                template="simple_white"
+               )
+
+fig.update_xaxes(side="top")
+
+fig.show()
+```
+
+## 跨練設計(tie)
+1. 拆解
+python helper_scripts/parse_multiple_chains.py \
+  --input_path input/6ehb/ \
+  --output_path 6ehb.jsonl
+2. 決定哪些要設計
+python helper_scripts/assign_fixed_chains.py \
+  --input_path 6ehb.jsonl \
+  --output_path 6ehb_AB_assigned.jsonl \
+  --chain_list "A B"
+3. 決定哪些位置市要不變得
+python helper_scripts/make_fixed_positions_dict.py \
+    --specify_non_fixed \
+    --position_list "1 3 4 6 7 8 10 11 13 14 17 18 30 31 33 34, 1 3 4 6 7 8 10 11 13 14 17 18 30 31 33 34" \
+    --chain_list "A B" \
+    --input_path 6ehb.jsonl \
+    --output_path 6ehb_fixed_pos.jsonl
+4. 指定榜定位置
+python helper_scripts/make_tied_positions_dict.py \
+    --chain_list "A B" \
+    --position_list "1 2 3 4 5 6 7 8, 1 2 3 4 5 6 7 8" \
+    --input_path=6ehb.jsonl \
+    --output_path=6ehb_tied.jsonl \
+
+python protein_mpnn_run.py \
+    --jsonl_path 6ehb.jsonl \
+    --chain_id_jsonl 6ehb_AB_assigned.jsonl \
+    --fixed_positions_jsonl 6ehb_fixed.jsonl \
+    --tied_positions_jsonl 6ehb_tied.jsonl \
+    --out_folder 6ehb/6ehb_designs \
+    --num_seq_per_target 2 \
+    --sampling_temp 0.1 \
+    --seed 37 \
+    --batch_size 1
+
+
+#pssm跳過 大部分時間用不到
