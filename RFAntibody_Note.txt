@@ -1,0 +1,88 @@
+pdb2HLT
+poetry run python ./scripts/util/chothia2HLT.py 1a2y_Ab.pdb --heavy B --light A
+python convert_chothia_to_hlt.py input.pdb --heavy H --light L --target A --Hcrop 110 --Lcrop 105
+python convert_chothia_to_hlt.py input.pdb --heavy H --light L --target A --output my_HLT.pdb
+
+poetry run python  /home/src/rfantibody/rfdiffusion/rfdiffusion_inference.py     --config-name antibody     antibody.target_pdb=/home/scripts/examples/example_inputs/rsv_site3.pdb     antibody.framework_pdb=/home/scripts/examples/example_inputs/hu-4D5-8_Fv.pdb     inference.ckpt_override_path=/home/weights/RFdiffusion_Ab.pt     'ppi.hotspot_res=[T305,T456]'     'antibody.design_loops=[L1:8-13,L2:7,L3:9-11,H1:7,H2:6,H3:5-13]'     inference.num_designs=20     inference.output_prefix=/home/scripts/examples/example_outputs/ab_des
+
+poetry run python  /home/src/rfantibody/rfdiffusion/rfdiffusion_inference.py     --config-name antibody     antibody.target_pdb=1a2y_Ag.pdb     antibody.framework_pdb=1a2y_Ab_HLT.pdb     inference.ckpt_override_path=/home/weights/RFdiffusion_Ab.pt     'ppi.hotspot_res=[C9,C10,C12,C13,C14,C16,C17,C18,C19,C20,C21,C22,C23,C24,C25,C26,C27,C28,C29,C30,C34,C99,C100,C101,C102,C103,C104,C105,C106,C109,C110,C111,C112,C113,C114,C115,C116,C117,C118,C119,C120,C121,C122,C123,C124,C125,C126,C127,C128,C129]'     'antibody.design_loops=[H1:7,H2:5,H3:8,L1:11,L2:7,L3:9]'     inference.num_designs=3     inference.output_prefix=/home/1a2y_test
+
+
+run python  /home/src/rfantibody/rfdiffusion/rfdiffusion_inference.py   
+    --config-name antibody 
+    antibody.target_pdb=/home/scripts/examples/example_inputs/rsv_site3.pdb 
+    antibody.framework_pdb=/home/scripts/examples/example_inputs/hu-4D5-8_Fv.pdb
+    inference.ckpt_override_path=/home/weights/RFdiffusion_Ab.pt     
+    'ppi.hotspot_res=[T305,T456]'     
+    'antibody.design_loops=[L1:8-13,L2:7,L3:9-11,H1:7,H2:6,H3:5-13]'     
+    inference.num_designs=20     
+    inference.output_prefix=/home/scripts/examples/example_outputs/ab_des
+
+    antibody.target_pdb -> 抗原結構(可以的話最好cropped過)
+    antibody.framework_pdb -> 抗體結構(HLT檔案), 只會修改標記事CDR-loop的結構, 保留已經優化好的抗體 scaffold，只改你想設計的環（loop）]
+                              但問題是生成HLT的檔案根本和他說的不一樣啊
+    inference.ckpt_override_path
+    ppi.hotspot_res
+    antibody.design_loops: 注意一下這邊是長度
+        如果 loop 在 dict 裡有長度範圍 → 從範圍內均勻隨機抽長度
+        如果 loop 在 dict 裡但沒給長度 → 設計序列和結構，但長度固定等於框架。
+        如果 loop 在框架裡但不在 dict → 序列和結構固定，不設計。
+    inference.num_designs
+    inference.output_prefix
+
+
+MPNN
+poetry run python /home/scripts/proteinmpnn_interface_design.py \
+    -pdbdir /home/1a2y \
+    -outpdbdir /home/1a2y
+
+    options:
+  -h, --help            show this help message and exit
+  -pdbdir PDBDIR        The name of a directory of pdbs to run through the
+                        model
+  -quiver QUIVER        The name of a quiver file to run this metric on.
+  -outquiver OUTQUIVER  The name of the quiver file to which output structs
+                        will be written
+  -outpdbdir OUTPDBDIR  The directory to which the output PDB files will be
+                        written
+  -runlist RUNLIST      The path of a list of pdb tags to run (default: '';
+                        Run all PDBs
+  -checkpoint_name CHECKPOINT_NAME
+                        The name of a file where tags which have finished will
+                        be written (default: check.point)
+  -debug                When active, errors will cause the script to crash and
+                        the error message to be printed out (default: False)
+  -loop_string LOOP_STRING
+                        The list of loops which you wish to design
+  -seqs_per_struct SEQS_PER_STRUCT
+                        The number of sequences to generate for each structure
+                        (default: 1)
+  -checkpoint_path CHECKPOINT_PATH
+  -temperature TEMPERATURE
+                        An a3m file containing the MSA of your target
+  -augment_eps AUGMENT_EPS
+                        The variance of random noise to add to the atomic
+                        coordinates (default 0)
+  -protein_features PROTEIN_FEATURES
+                        What type of protein features to input to ProteinMPNN
+                        (default: full)
+  -omit_AAs OMIT_AAS    A string of all residue types (one letter case-
+                        insensitive) that you would not like to use for
+                        design. Letters not corresponding to residue types
+                        will be ignored
+  -num_connections NUM_CONNECTIONS
+                        Number of neighbors each residue is connected to,
+                        default 48, higher number leads to better interface
+                        design but will cost more to run the model.
+
+
+poetry run python /home/scripts/rf2_predict.py \
+    input.pdb_dir=/home/scripts/examples/rf2/example_inputs \
+    output.pdb_dir=/home/scripts/examples/rf2/example_outputs \
+    model.model_weights=/home/weights/RF2_ab.pt
+
+
+poetry run python /home/scripts/rf2_predict.py \
+    input.pdb_dir=/home/theodore/RFantibody/1a2y/MPNN \
+    output.pdb_dir=/home/theodore/RFantibody/1a2y/rf2 \
+    model.model_weights=/home/weights/RF2_ab.pt
